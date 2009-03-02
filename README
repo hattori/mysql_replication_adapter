@@ -47,7 +47,7 @@ And that's it. It's configured now.
 
 Usage
 ================
-There are a number of ways to make use of the MysqlReplicationAdapter's slave-balancing capabilities. The simplest way is to pass a new option to ActiveRecord::Base#find. The option is called :use_slave, and it should => true when you want to send the query to a slave. For instance:
+There are a number of ways to make use of the MysqlReplicationAdapter's slave-balancing capabilities. The simplest way is to pass a new option to ActiveRecord::Base#find. The option is called :use_slave, and it should => true or non-nil object when you want to send the query to a slave. For instance:
 
 class Author < ActiveRecord::Base; end;
 
@@ -55,13 +55,30 @@ Author.find(:all, :use_slave => true)
 
 This will choose a random slave and send it the query.
 
+Author.find(author_id, :use_slave => author_id)
+
+This will choose a slave determinded by a really simple hash-based algorithm and send it the query where a hash-based algorithm is to use a reminder of an author_id divided by the number of slaves if author_id is a Number, one of a hash value of an author_id divided by the number of slaves if author_id is an Object such as String. 
+Thus, if an identical id is specified as a value of :use_slave, the same slave is always picked so that we can expect MySQL query cache.
+
 The other way to slave balance a query is to use block syntax. The ActiveRecord::Base#connection object now has a method called load_balance_query that requires a block. It will select a slave connection behind the scenes, and then any read queries you execute will be sent to that database for the duration of the block. For example:
 
 ActiveRecord::Base.connection.load_balance_query do
   Author.find(:all) # will be load balanced, even though not specified to find
 end
 
+is equivalent to 
+
+ActiveRecord::Base.connection.load_balance_query true do
+  Author.find(:all) # will be load balanced, even though not specified to find. ( random select )
+end
+
 Note: if you use the block syntax and cause a write query to be generated somehow, then you will receive an exception. The adapter explicitly stops you from writing to any database but the master.
+
+You can also slave balance a query by a hash-based manner to specify a number or an object as an argument of load_balance_query method.
+
+ActiveRecord::Base.connection.load_balance_query author_id do # <-- Watch! An author_id is specified. 
+  Author.find(author_id) 
+end
 
 Another set of methods that can take advantage of the slave balancing is the calculations. For instance:
 
@@ -71,10 +88,14 @@ Finally, I'm sure there are those of you saying, "But I use find_by_sql and that
 
 Author.find_by_sql("SELECT * FROM authors WHERE name = 'bryan';", true) # will be load balanced
 
+Author.find_by_sql("SELECT * FROM authors WHERE name = 'bryan';", "bryan") # will be load balanced by a hash-based manner.
+Author.find_by_sql("SELECT * FROM authors WHERE id = '1';", 1) # will be load balanced by a hash-based manner.
+
+
 Limitations
 ================
 - MysqlReplicationAdapter has no idea of slave database currency. That is, if for some reason your slave dbs are way behind, and you send a query to a slave database, you could get back some out of date data. It's up to you to deal with this. My suggestion is to only load balance queries that you know you can get out-of-date data from and not be hurt. So, stick to authenticating people against the master database.
 
-- MysqlReplicationAdapter doesn't do any sort of clever load balancing, it just selects a random slave from its set of slaves.
+- MysqlReplicationAdapter selects a slave by random or a really simple hash-based manner from its set of slaves.
 
 - MysqlReplicationAdapter doesn't partition your writes across multiple databases, and it isn't going to.

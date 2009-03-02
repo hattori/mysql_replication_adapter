@@ -69,6 +69,10 @@ module ActiveRecord
         end
       end
 
+      def generate_hash_value obj
+        hash_value = (obj.is_a?(TrueClass) or obj.is_a?(FalseClass) or obj.is_a?(Numeric)) ? obj : obj.hash
+      end
+
       alias_method :old_find_every, :find_every
       # Override the standard find to check for the :use_slave option. When specified, the
       # resulting query will be sent to a slave machine.
@@ -77,7 +81,10 @@ module ActiveRecord
 #          old_find_every(options)
 #        end
         if slave_valid(options[:use_slave]) 
-          connection.load_balance_query { old_find_every(options) }
+          hash_value = generate_hash_value(options[:use_slave])
+          connection.load_balance_query hash_value do 
+            old_find_every(options)
+          end
         else
           old_find_every(options)
         end
@@ -91,7 +98,10 @@ module ActiveRecord
 #          old_find_by_sql sql
 #        end
         if slave_valid(use_slave)
-          connection.load_balance_query { old_find_by_sql sql }
+          hash_value = generate_hash_value(use_slave)
+          connection.load_balance_query hash_value do 
+            old_find_by_sql sql
+          end
         else
           old_find_by_sql sql
         end
@@ -104,7 +114,10 @@ module ActiveRecord
 #          old_count_by_sql sql
 #        end
         if slave_valid(use_slave)
-          connection.load_balance_query { old_count_by_sql sql }
+          hash_value = generate_hash_value(use_slave)
+          connection.load_balance_query hash_value do 
+            old_count_by_sql sql
+          end
         else
           old_count_by_sql sql
         end
@@ -118,7 +131,10 @@ module ActiveRecord
 #          old_calculate(operation, column_name, options)
 #        end
         if slave_valid(use_slave)
-          connection.load_balance_query { old_calculate(operation, column_name, options) }
+          hash_value = generate_hash_value(use_slave)
+          connection.load_balance_query hash_value do
+            old_calculate(operation, column_name, options)
+          end
         else
           old_calculate(operation, column_name, options)
         end
